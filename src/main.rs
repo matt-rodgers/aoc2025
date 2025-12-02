@@ -6,6 +6,7 @@ use std::{
 use clap::Parser;
 
 mod day01;
+mod day02;
 
 #[derive(Parser)]
 struct Args {
@@ -13,7 +14,7 @@ struct Args {
     day: Option<usize>,
 }
 
-static DAYS: [&(dyn Aoc + Send + Sync); 1] = [&day01::Day01];
+static DAYS: [&(dyn Aoc + Send + Sync); 2] = [&day01::Day01, &day02::Day02];
 
 fn main() {
     let args = Args::parse();
@@ -48,7 +49,7 @@ impl Display for TimedSolution {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "pt1={:20} pt2={:20} elapsed={} us",
+            "pt1 = {:20} pt2 = {:20} elapsed = {} us",
             self.pt1,
             self.pt2,
             self.elapsed.as_micros()
