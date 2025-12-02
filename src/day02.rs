@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::Aoc;
 
 const INPUT: &str = include_str!("../inputs/02.in");
@@ -12,49 +14,76 @@ impl Aoc for Day02 {
 }
 
 fn run_on_input(input: &str) -> (usize, usize) {
-    let pt1 = input
-        .trim()
-        .split(',')
-        .map(|range| {
-            let (a, b) = range.split_once('-').unwrap();
+    let mut pt1 = 0;
+    let mut pt2 = 0;
 
-            let ndigits_split = a.len() / 2;
+    for range in input.trim().split(',') {
+        let (a, b) = range.split_once('-').unwrap();
+        let an: usize = a.parse().unwrap();
+        let bn: usize = b.parse().unwrap();
 
-            let mut first_half = if (a.len() % 2) != 0 {
-                // If we had an odd number of digits, we should start at the next power of 10. e.g.
-                // if we have 912, rather than the first half being 9 and the first n being 99,
-                // we should start from 10 so that the first n is 1000 to avoid checking a load of
-                // numbers that cannot possibly be the solution
-                10usize.pow(ndigits_split as u32)
-            } else {
-                a.split_at(ndigits_split).0.parse().unwrap()
-            };
+        // Part 1
+        let start_at: usize = a.split_at(a.len() / 2).0.parse().unwrap_or(1);
+        for n in start_at.. {
+            let repeat_twice = RepeatPatternIter::new(n).nth(1).unwrap();
 
-            let mut count = 0;
+            if repeat_twice > bn {
+                break;
+            }
 
-            let a: usize = a.parse().unwrap();
-            let b: usize = b.parse().unwrap();
+            if repeat_twice >= an {
+                pt1 += repeat_twice;
+            }
+        }
 
-            loop {
-                let ndigits = count_base10_digits(first_half);
-                let n = first_half * 10usize.pow(ndigits as u32) + first_half;
-
-                if n > b {
+        // Part 2
+        let mut already_found = HashSet::new();
+        let upper_bound = b.split_at(b.len().div_ceil(2)).0.parse::<usize>().unwrap() + 1;
+        for n in 1..=upper_bound {
+            for pattern in RepeatPatternIter::new(n).skip(1) {
+                if pattern > bn {
                     break;
                 }
 
-                if n >= a {
-                    count += n;
+                if pattern >= an && !already_found.contains(&pattern) {
+                    already_found.insert(pattern);
+                    pt2 += pattern;
                 }
-
-                first_half += 1;
             }
+        }
+    }
 
-            count
-        })
-        .sum();
+    (pt1, pt2)
+}
 
-    (pt1, 0)
+#[derive(Debug)]
+struct RepeatPatternIter {
+    n: usize,
+    repeats: usize,
+    digits: usize,
+}
+
+impl RepeatPatternIter {
+    pub fn new(n: usize) -> Self {
+        Self {
+            n,
+            repeats: 1,
+            digits: count_base10_digits(n),
+        }
+    }
+}
+
+impl Iterator for RepeatPatternIter {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut item = self.n;
+        for i in 1..self.repeats {
+            item += self.n * 10usize.pow((self.digits * i) as u32);
+        }
+        self.repeats += 1;
+        Some(item)
+    }
 }
 
 fn count_base10_digits(n: usize) -> usize {
@@ -75,9 +104,9 @@ mod tests {
 
     #[test]
     fn test_example() {
-        let (pt1, _pt2) = run_on_input(EXAMPLE_INPUT);
+        let (pt1, pt2) = run_on_input(EXAMPLE_INPUT);
         assert_eq!(1227775554, pt1);
-        // assert_eq!(0, pt2);
+        assert_eq!(4174379265, pt2);
     }
 
     #[test]
@@ -87,5 +116,20 @@ mod tests {
         assert_eq!(3, count_base10_digits(499));
         assert_eq!(4, count_base10_digits(1000));
         assert_eq!(11, count_base10_digits(12345678901));
+    }
+
+    #[test]
+    fn test_repeat_pattern_iter() {
+        let mut rp = RepeatPatternIter::new(1);
+        assert_eq!(Some(1), rp.next());
+        assert_eq!(Some(11), rp.next());
+        assert_eq!(Some(111), rp.next());
+        assert_eq!(Some(1111), rp.next());
+
+        let mut rp = RepeatPatternIter::new(321);
+        assert_eq!(Some(321), rp.next());
+        assert_eq!(Some(321321), rp.next());
+        assert_eq!(Some(321321321), rp.next());
+        assert_eq!(Some(321321321321), rp.next());
     }
 }
