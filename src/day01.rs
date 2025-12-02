@@ -1,8 +1,14 @@
+use crate::Aoc;
+
 const INPUT: &str = include_str!("../inputs/01.in");
 
-pub fn run() {
-    let (pt1, pt2) = run_on_input(INPUT);
-    println!("pt1: {}, pt2: {}", pt1, pt2);
+pub struct Day01;
+
+impl Aoc for Day01 {
+    fn run(&self) -> (String, String) {
+        let (pt1, pt2) = run_on_input(INPUT);
+        (pt1.to_string(), pt2.to_string())
+    }
 }
 
 fn run_on_input(input: &str) -> (usize, usize) {
