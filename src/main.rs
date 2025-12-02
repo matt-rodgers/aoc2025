@@ -26,10 +26,13 @@ fn main() {
             println!("{timed_solution}");
         }
         None => {
+            let mut total_elapsed = Duration::default();
             for (i, aoc) in DAYS.iter().enumerate() {
                 let timed_solution = run_with_timing(*aoc);
+                total_elapsed += timed_solution.elapsed;
                 println!("day {:2}: {timed_solution}", i + 1);
             }
+            println!("total elapsed time: {} us", total_elapsed.as_micros());
         }
     }
 }
