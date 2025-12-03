@@ -11,31 +11,36 @@ impl Aoc for Day03 {
     }
 }
 
-fn run_on_input(input: &str) -> (usize, usize) {
+fn run_on_input(input: &str) -> (u64, u64) {
     let pt1 = input
         .trim()
         .lines()
-        .map(|line| {
-            let line = line.as_bytes();
-            let (highest, position) = first_maximum(line.iter().copied());
-
-            // If the highest number is in the last position, it can't be the first number of the two
-            // digit result. So find the next highest, skipping the last position.
-            let (highest, position) = if position == line.len() - 1 {
-                first_maximum(line.iter().copied().take(line.len() - 1))
-            } else {
-                (highest, position)
-            };
-
-            let (highest_of_remaining, _) = first_maximum(line.iter().copied().skip(position + 1));
-
-            let n = highest * 10 + highest_of_remaining;
-
-            n as usize
-        })
+        .map(|line| make_highest_number(line.as_bytes(), 2))
         .sum();
 
-    (pt1, 0)
+    let pt2 = input
+        .trim()
+        .lines()
+        .map(|line| make_highest_number(line.as_bytes(), 12))
+        .sum();
+
+    (pt1, pt2)
+}
+
+fn make_highest_number(line: &[u8], ndigits: usize) -> u64 {
+    assert!(line.len() >= ndigits);
+
+    let mut n = 0;
+    let mut start_index = 0;
+
+    for i in (0..ndigits).rev() {
+        let end_index = line.len() - i;
+        let (highest, position) = first_maximum(line[start_index..end_index].iter().copied());
+        n = (n * 10) + highest as u64;
+        start_index += position + 1;
+    }
+
+    n
 }
 
 fn first_maximum<T: Iterator<Item = u8>>(iter: T) -> (u8, usize) {
@@ -61,6 +66,6 @@ mod tests {
     fn test_example() {
         let (pt1, pt2) = run_on_input(EXAMPLE_INPUT);
         assert_eq!(357, pt1);
-        assert_eq!(0, pt2);
+        assert_eq!(3121910778619, pt2);
     }
 }
