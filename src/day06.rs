@@ -14,42 +14,68 @@ impl Aoc for Day06 {
 }
 
 fn run_on_input(input: &str) -> (u64, u64) {
-    let mut lines_iter = input
-        .trim()
-        .lines()
-        .map(|line| line.split_whitespace())
-        .rev();
+    let columns: Columns = input.parse().unwrap();
 
-    let mut context: Vec<MathContext> = lines_iter
-        .next()
-        .unwrap()
-        .map(|op| MathContext {
-            value: None,
-            op: op.parse::<Operation>().unwrap(),
-        })
-        .collect();
-
-    for line in lines_iter {
-        for (context, val) in context.iter_mut().zip(line) {
-            let n: u64 = val.parse().unwrap();
-            context.value = match context.value {
-                None => Some(n),
-                Some(current) => Some(context.op.apply(current, n)),
-            };
-        }
-    }
-
-    let pt1 = context
+    let pt1 = columns
+        .0
         .iter()
-        .fold(0, |accum, ctx| accum + ctx.value.unwrap());
+        .map(|column| {
+            let mut column_iter = column.iter();
+            let operation: Operation = column_iter.next().unwrap().parse().unwrap();
+            column_iter.fold(0, |accum, item| {
+                let n: u64 = item.trim().parse().unwrap();
+                match operation {
+                    Operation::Add => accum + n,
+                    Operation::Multiply => match accum {
+                        0 => n,
+                        _ => accum * n,
+                    },
+                }
+            })
+        })
+        .sum();
 
-    (pt1, 0)
-}
+    let pt2 = columns
+        .0
+        .iter()
+        .map(|column| {
+            let mut column_iter = column.iter();
+            let ops_str = column_iter.next().unwrap();
+            let column_iter = column_iter; // immutable
+            let l = ops_str.len(); // all strings are the same length
+            let operation: Operation = ops_str.parse().unwrap();
+            (0..l)
+                .map(|i| {
+                    column_iter.clone().rev().fold(None, |accum, item| {
+                        let ch = item.as_bytes()[i];
+                        if ch.is_ascii_digit() {
+                            let digit = (ch - b'0') as u64;
+                            match accum {
+                                None => Some(digit),
+                                Some(existing) => Some(existing * 10 + digit),
+                            }
+                        } else {
+                            accum
+                        }
+                    })
+                })
+                .fold(0, |accum, n| {
+                    let Some(n) = n else {
+                        return 0;
+                    };
 
-#[derive(Debug, Clone, Copy)]
-struct MathContext {
-    value: Option<u64>,
-    op: Operation,
+                    match operation {
+                        Operation::Add => accum + n,
+                        Operation::Multiply => match accum {
+                            0 => n,
+                            _ => accum * n,
+                        },
+                    }
+                })
+        })
+        .sum();
+
+    (pt1, pt2)
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -58,24 +84,55 @@ enum Operation {
     Multiply,
 }
 
-impl Operation {
-    fn apply(&self, a: u64, b: u64) -> u64 {
-        match self {
-            Operation::Add => a + b,
-            Operation::Multiply => a * b,
-        }
-    }
-}
-
 impl FromStr for Operation {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
+        match s.trim() {
             "+" => Ok(Operation::Add),
             "*" => Ok(Operation::Multiply),
             _ => Err(()),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Columns(Vec<Vec<String>>);
+
+impl FromStr for Columns {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let lines = s.lines().rev();
+
+        let mut start = 0;
+        let mut result = Vec::new();
+        let mut found_end = false;
+
+        for i in 0.. {
+            if lines.clone().all(|line| match line.chars().nth(i) {
+                Some(' ') => true,
+                Some(_) => false,
+                None => {
+                    found_end = true;
+                    true
+                }
+            }) {
+                result.push(
+                    lines
+                        .clone()
+                        .map(|line| line[start..i].to_string())
+                        .collect(),
+                );
+                start = i;
+            }
+
+            if found_end {
+                break;
+            }
+        }
+
+        Ok(Columns(result))
     }
 }
 
@@ -89,6 +146,6 @@ mod tests {
     fn test_example() {
         let (pt1, pt2) = run_on_input(EXAMPLE_INPUT);
         assert_eq!(4277556, pt1);
-        assert_eq!(0, pt2);
+        assert_eq!(3263827, pt2);
     }
 }
