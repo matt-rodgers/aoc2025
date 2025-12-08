@@ -27,21 +27,33 @@ fn run_on_input(input: &str, merge_count: usize) -> (usize, usize) {
 
     let mut existing_connections = HashSet::new();
 
-    for _ in 0..merge_count {
-        merge_closest(&mut circuits, &mut existing_connections);
+    let mut pt1 = 0;
+    let mut i = 1;
+    let mut latest_merge: Option<ClosestPair> = None;
+
+    while circuits.len() > 1 {
+        let merged = merge_closest(&mut circuits, &mut existing_connections);
+        latest_merge.replace(merged);
+
+        if i == merge_count {
+            let mut sizes: Vec<_> = circuits.values().map(|v| v.len()).collect();
+            sizes.sort_unstable();
+            pt1 = (0..3).fold(1, |accum, _| accum * sizes.pop().unwrap());
+        }
+        i += 1;
     }
 
-    let mut sizes: Vec<_> = circuits.values().map(|v| v.len()).collect();
-    sizes.sort_unstable();
-    let pt1: usize = (0..3).fold(1, |accum, _| accum * sizes.pop().unwrap());
+    dbg!(&latest_merge);
+    let latest_merge = latest_merge.unwrap();
+    let pt2 = latest_merge.a.1.x * latest_merge.b.1.x;
 
-    (pt1, 0)
+    (pt1, pt2 as usize)
 }
 
 fn merge_closest(
     circuits: &mut HashMap<usize, HashSet<Point3D>>,
     existing_connections: &mut HashSet<(Point3D, Point3D)>,
-) {
+) -> ClosestPair {
     let mut closest_pair: Option<ClosestPair> = None;
 
     for (id, circuit) in circuits.iter() {
@@ -79,11 +91,17 @@ fn merge_closest(
 
     // Merge the closest pairs, if they're not already part of the same circuit
     let closest = closest_pair.take().unwrap();
-    add_connection(existing_connections, closest.a.1, closest.b.1);
+    add_connection(
+        existing_connections,
+        closest.a.1.clone(),
+        closest.b.1.clone(),
+    );
     if closest.a.0 != closest.b.0 {
         let a = circuits.remove(&closest.a.0).unwrap();
         circuits.entry(closest.b.0).and_modify(|set| set.extend(a));
     }
+
+    closest
 }
 
 fn are_already_connected(
@@ -149,6 +167,6 @@ mod tests {
     fn test_example() {
         let (pt1, pt2) = run_on_input(EXAMPLE_INPUT, 10);
         assert_eq!(40, pt1);
-        assert_eq!(0, pt2);
+        assert_eq!(25272, pt2);
     }
 }
