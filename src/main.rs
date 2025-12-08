@@ -12,6 +12,7 @@ mod day04;
 mod day05;
 mod day06;
 mod day07;
+mod day08;
 
 #[derive(Parser)]
 struct Args {
@@ -19,7 +20,7 @@ struct Args {
     day: Option<usize>,
 }
 
-static DAYS: [&(dyn Aoc + Send + Sync); 7] = [
+static DAYS: [&(dyn Aoc + Send + Sync); 8] = [
     &day01::Day01,
     &day02::Day02,
     &day03::Day03,
@@ -27,6 +28,7 @@ static DAYS: [&(dyn Aoc + Send + Sync); 7] = [
     &day05::Day05,
     &day06::Day06,
     &day07::Day07,
+    &day08::Day08,
 ];
 
 fn main() {
