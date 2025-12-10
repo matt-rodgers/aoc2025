@@ -34,10 +34,10 @@ fn run_on_input(input: &str) -> (usize, usize) {
                     .iter()
                     .combinations_with_replacement(i)
                     .any(|combinations| {
-                        let mut state = machine.initial_state.clone();
+                        let mut state = machine.initial_indicators.clone();
                         for button in combinations {
                             state.apply_button_press(button);
-                            if state == machine.desired_state {
+                            if state == machine.desired_indicators {
                                 return true;
                             }
                         }
@@ -52,15 +52,62 @@ fn run_on_input(input: &str) -> (usize, usize) {
         })
         .sum();
 
-    (pt1, 0)
+    let pt2 = machines
+        .iter()
+        .map(|machine| {
+            let valid_buttons: Vec<Button> = machine
+                .buttons
+                .0
+                .iter()
+                .filter(|button| {
+                    // If a button increments any index for which the desired joltage is zero, this
+                    // button cannot possibly be a port of the solution
+                    !button
+                        .0
+                        .iter()
+                        .any(|index| machine.desired_joltages.0[*index] == 0)
+                })
+                .cloned()
+                .collect();
+
+            eprintln!("looking at machine {:?}", machine);
+
+            for i in 1.. {
+                if valid_buttons
+                    .iter()
+                    .combinations_with_replacement(i)
+                    .any(|combinations| {
+                        let mut state = machine.initial_joltages.clone();
+                        for button in combinations {
+                            state.apply_button_press(button);
+                            if state == machine.desired_joltages {
+                                return true;
+                            } else if state.exceeds(&machine.desired_joltages) {
+                                // Return early and don't bother pressing more buttons
+                                return false;
+                            }
+                        }
+                        false
+                    })
+                {
+                    return i;
+                }
+            }
+
+            panic!("we hit max usize and still didn't find a combination that works...");
+        })
+        .sum();
+
+    (pt1, pt2)
 }
 
 #[derive(Debug, Clone)]
 struct Machine {
-    initial_state: IndicatorLights,
-    desired_state: IndicatorLights,
+    initial_indicators: IndicatorLights,
+    desired_indicators: IndicatorLights,
+    initial_joltages: Joltages,
+    desired_joltages: Joltages,
     buttons: Buttons,
-    joltages: Joltages,
 }
 
 impl FromStr for Machine {
@@ -86,7 +133,7 @@ impl FromStr for Machine {
         let initial_state = IndicatorLights(vec![false; desired_state.0.len()]);
 
         let mut buttons = Vec::new();
-        let mut joltages = Vec::new();
+        let mut desired_joltages = Vec::new();
 
         for part in parts {
             if part.starts_with('(') {
@@ -108,16 +155,19 @@ impl FromStr for Machine {
                     .split(',')
                     .map(|n| n.parse().unwrap())
                 {
-                    joltages.push(joltage);
+                    desired_joltages.push(joltage);
                 }
             }
         }
 
+        let initial_joltages = vec![0; desired_joltages.len()];
+
         Ok(Machine {
-            initial_state,
-            desired_state,
+            initial_indicators: initial_state,
+            desired_indicators: desired_state,
+            initial_joltages: Joltages(initial_joltages),
+            desired_joltages: Joltages(desired_joltages),
             buttons: Buttons(buttons),
-            joltages: Joltages(joltages),
         })
     }
 }
@@ -139,8 +189,20 @@ struct Buttons(Vec<Button>);
 #[derive(Debug, Clone)]
 struct Button(Vec<usize>);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Joltages(Vec<usize>);
+
+impl Joltages {
+    fn apply_button_press(&mut self, button: &Button) {
+        for index in button.0.iter() {
+            self.0[*index] += 1;
+        }
+    }
+
+    fn exceeds(&self, other: &Joltages) -> bool {
+        self.0.iter().zip(other.0.iter()).any(|(s, o)| s > o)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -152,6 +214,6 @@ mod tests {
     fn test_example() {
         let (pt1, pt2) = run_on_input(EXAMPLE_INPUT);
         assert_eq!(7, pt1);
-        assert_eq!(0, pt2);
+        assert_eq!(33, pt2);
     }
 }
