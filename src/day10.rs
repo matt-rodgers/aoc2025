@@ -32,7 +32,11 @@ fn run_on_input(input: &str) -> (usize, usize) {
                     .buttons
                     .0
                     .iter()
-                    .combinations_with_replacement(i)
+                    // We can just use `combinations` rather than `combinations_with_replacement`
+                    // here, since the buttons toggle the state and therefore pressing a button
+                    // twice has no effect, pressing it three times has the same effect as pressing
+                    // it once, and so on.
+                    .combinations(i)
                     .any(|combinations| {
                         let mut state = machine.initial_indicators.clone();
                         for button in combinations {
@@ -52,53 +56,22 @@ fn run_on_input(input: &str) -> (usize, usize) {
         })
         .sum();
 
-    let pt2 = machines
-        .iter()
-        .map(|machine| {
-            let valid_buttons: Vec<Button> = machine
+    for machine in machines {
+        for (i, joltage) in machine.desired_joltages.0.iter().enumerate() {
+            let num_contributing_buttons = machine
                 .buttons
                 .0
                 .iter()
-                .filter(|button| {
-                    // If a button increments any index for which the desired joltage is zero, this
-                    // button cannot possibly be a port of the solution
-                    !button
-                        .0
-                        .iter()
-                        .any(|index| machine.desired_joltages.0[*index] == 0)
-                })
-                .cloned()
-                .collect();
+                .filter(|button| button.0.contains(&i))
+                .count();
 
-            eprintln!("looking at machine {:?}", machine);
+            dbg!(i, num_contributing_buttons);
+        }
 
-            for i in 1.. {
-                if valid_buttons
-                    .iter()
-                    .combinations_with_replacement(i)
-                    .any(|combinations| {
-                        let mut state = machine.initial_joltages.clone();
-                        for button in combinations {
-                            state.apply_button_press(button);
-                            if state == machine.desired_joltages {
-                                return true;
-                            } else if state.exceeds(&machine.desired_joltages) {
-                                // Return early and don't bother pressing more buttons
-                                return false;
-                            }
-                        }
-                        false
-                    })
-                {
-                    return i;
-                }
-            }
+        println!("");
+    }
 
-            panic!("we hit max usize and still didn't find a combination that works...");
-        })
-        .sum();
-
-    (pt1, pt2)
+    (pt1, 0)
 }
 
 #[derive(Debug, Clone)]
