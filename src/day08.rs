@@ -1,7 +1,10 @@
 use std::{
     collections::{HashMap, HashSet},
+    hash::Hash,
     str::FromStr,
 };
+
+use itertools::Itertools;
 
 use crate::Aoc;
 
@@ -16,113 +19,50 @@ impl Aoc for Day08 {
     }
 }
 
-fn run_on_input(input: &str, merge_count: usize) -> (usize, usize) {
-    // Structure the data as a map of circuit_id: nodes_in_circuit
-    let mut circuits: HashMap<usize, HashSet<Point3D>> = input
+fn run_on_input(input: &str, merge_count: usize) -> (usize, i64) {
+    let nodes: Vec<Point3D> = input
         .trim()
         .lines()
-        .enumerate()
-        .map(|(i, line)| (i, HashSet::from([line.parse().unwrap()])))
+        .map(|line| line.parse().unwrap())
         .collect();
 
-    let mut existing_connections = HashSet::new();
+    let mut connections: Vec<(f64, &Point3D, &Point3D)> = nodes
+        .iter()
+        .tuple_combinations()
+        .map(|(a, b)| {
+            let distance = a.euclidean_distance(b);
+            (distance, a, b)
+        })
+        .collect();
 
-    let mut pt1 = 0;
-    let mut i = 1;
-    let mut latest_merge: Option<ClosestPair> = None;
+    // Sort largest to smallest
+    connections.sort_unstable_by(|a, b| b.0.total_cmp(&a.0));
 
-    while circuits.len() > 1 {
-        let merged = merge_closest(&mut circuits, &mut existing_connections);
-        latest_merge.replace(merged);
+    let mut ds = DisjointSet::new(nodes.clone());
 
-        if i == merge_count {
-            let mut sizes: Vec<_> = circuits.values().map(|v| v.len()).collect();
-            sizes.sort_unstable();
-            pt1 = (0..3).fold(1, |accum, _| accum * sizes.pop().unwrap());
+    // Make the number of connections required for part 1
+    for _ in 0..merge_count {
+        let (_, a, b) = connections.pop().unwrap();
+        ds.merge(a, b);
+    }
+
+    // Get the sets of connected nodes at this point in time, and multiply the largest 3.
+    let mut sets: Vec<_> = ds.as_sets().into_values().map(|set| set.len()).collect();
+    sets.sort_unstable();
+    let pt1 = sets.iter().rev().take(3).product();
+
+    // Do the rest of the connections until we have one giant set
+    let pt2 = loop {
+        let (_, a, b) = connections
+            .pop()
+            .expect("must reach pt2 answer before exhausting connections");
+
+        if matches!(ds.merge(a, b), Some(FullyMerged)) {
+            break a.x * b.x;
         }
-        i += 1;
-    }
+    };
 
-    dbg!(&latest_merge);
-    let latest_merge = latest_merge.unwrap();
-    let pt2 = latest_merge.a.1.x * latest_merge.b.1.x;
-
-    (pt1, pt2 as usize)
-}
-
-fn merge_closest(
-    circuits: &mut HashMap<usize, HashSet<Point3D>>,
-    existing_connections: &mut HashSet<(Point3D, Point3D)>,
-) -> ClosestPair {
-    let mut closest_pair: Option<ClosestPair> = None;
-
-    for (id, circuit) in circuits.iter() {
-        for node in circuit.iter() {
-            // For this node, iterate over all nodes in *all* circuits. If we connect two nodes
-            // that are already in the same circuit, this still counts as a connection but does not
-            // change the list of circuits at all.
-            for (other_id, other_circuit) in circuits.iter() {
-                for other_node in other_circuit.iter() {
-                    if node != other_node
-                        && !are_already_connected(
-                            existing_connections,
-                            node.clone(),
-                            other_node.clone(),
-                        )
-                    {
-                        let distance = node.euclidean_distance(other_node);
-                        let should_replace = match &closest_pair {
-                            None => true,
-                            Some(closest) => distance < closest.distance,
-                        };
-
-                        if should_replace {
-                            closest_pair.replace(ClosestPair {
-                                a: (*id, node.clone()),
-                                b: (*other_id, other_node.clone()),
-                                distance,
-                            });
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Merge the closest pairs, if they're not already part of the same circuit
-    let closest = closest_pair.take().unwrap();
-    add_connection(
-        existing_connections,
-        closest.a.1.clone(),
-        closest.b.1.clone(),
-    );
-    if closest.a.0 != closest.b.0 {
-        let a = circuits.remove(&closest.a.0).unwrap();
-        circuits.entry(closest.b.0).and_modify(|set| set.extend(a));
-    }
-
-    closest
-}
-
-fn are_already_connected(
-    existing_connections: &HashSet<(Point3D, Point3D)>,
-    a: Point3D,
-    b: Point3D,
-) -> bool {
-    let (larger, smaller) = if a > b { (a, b) } else { (b, a) };
-    existing_connections.contains(&(larger, smaller))
-}
-
-fn add_connection(existing_connections: &mut HashSet<(Point3D, Point3D)>, a: Point3D, b: Point3D) {
-    let (larger, smaller) = if a > b { (a, b) } else { (b, a) };
-    existing_connections.insert((larger, smaller));
-}
-
-#[derive(Debug, Clone)]
-struct ClosestPair {
-    a: (usize, Point3D),
-    b: (usize, Point3D),
-    distance: f64,
+    (pt1, pt2)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -157,6 +97,102 @@ impl Point3D {
     }
 }
 
+#[derive(Debug, Clone)]
+struct DisjointSet<T>(HashMap<T, DisjointSetItem<T>>);
+
+impl<T: Hash + Eq + Clone> DisjointSet<T> {
+    pub fn new(items: impl IntoIterator<Item = T>) -> Self {
+        Self(
+            items
+                .into_iter()
+                .map(|item| (item, Default::default()))
+                .collect(),
+        )
+    }
+
+    /// Find the root node of the tree containing this node
+    fn find_root(&self, node: T) -> Option<T> {
+        let item = self.0.get(&node)?;
+
+        if let Some(ref parent) = item.parent {
+            self.find_root(parent.clone())
+        } else {
+            Some(node)
+        }
+    }
+
+    /// Merge the trees containing nodes a and b
+    pub fn merge(&mut self, a: &T, b: &T) -> Option<FullyMerged> {
+        let root_a = self
+            .find_root(a.clone())
+            .expect("must merge items that are in set");
+        let root_b = self
+            .find_root(b.clone())
+            .expect("must merge items that are in set");
+
+        if root_a == root_b {
+            if self.0.get(&root_a).unwrap().size == self.0.len() as u64 {
+                return Some(FullyMerged);
+            } else {
+                return None;
+            }
+        }
+
+        let size_a = self.0.get(&root_a).unwrap().size;
+        let size_b = self.0.get(&root_b).unwrap().size;
+        let total_size = size_a + size_b;
+
+        if size_a > size_b {
+            *self.0.get_mut(&root_b).unwrap() = DisjointSetItem {
+                parent: Some(root_a.clone()),
+                size: total_size,
+            };
+            self.0.get_mut(&root_a).unwrap().size = total_size;
+        } else {
+            *self.0.get_mut(&root_a).unwrap() = DisjointSetItem {
+                parent: Some(root_b.clone()),
+                size: total_size,
+            };
+            self.0.get_mut(&root_b).unwrap().size = total_size;
+        }
+
+        if total_size == self.0.len() as u64 {
+            Some(FullyMerged)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_sets(&self) -> HashMap<T, HashSet<T>> {
+        let mut out: HashMap<T, HashSet<T>> = HashMap::new();
+
+        for node in self.0.keys() {
+            let root = self.find_root(node.clone()).unwrap();
+            out.entry(root).or_default().insert(node.clone());
+        }
+
+        out
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FullyMerged;
+
+#[derive(Debug, Clone)]
+struct DisjointSetItem<T> {
+    pub parent: Option<T>,
+    pub size: u64,
+}
+
+impl<T> Default for DisjointSetItem<T> {
+    fn default() -> Self {
+        Self {
+            parent: None,
+            size: 1,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,5 +204,22 @@ mod tests {
         let (pt1, pt2) = run_on_input(EXAMPLE_INPUT, 10);
         assert_eq!(40, pt1);
         assert_eq!(25272, pt2);
+    }
+
+    #[test]
+    fn test_disjoint_set() {
+        let mut ds = DisjointSet::new(['a', 'b', 'c', 'd', 'e']);
+        assert_eq!(None, ds.merge(&'a', &'b'));
+        assert_eq!(None, ds.merge(&'c', &'d'));
+        assert_eq!(None, ds.merge(&'c', &'e'));
+
+        // These ones already have the same parent
+        assert_eq!(None, ds.merge(&'d', &'e'));
+
+        // There should be two sets at this stage
+        assert_eq!(ds.as_sets().len(), 2);
+
+        assert_eq!(Some(FullyMerged), ds.merge(&'a', &'d'));
+        assert_eq!(ds.as_sets().len(), 1);
     }
 }
