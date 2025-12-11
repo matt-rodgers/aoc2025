@@ -56,20 +56,20 @@ fn run_on_input(input: &str) -> (usize, usize) {
         })
         .sum();
 
-    for machine in machines {
-        for (i, joltage) in machine.desired_joltages.0.iter().enumerate() {
-            let num_contributing_buttons = machine
-                .buttons
-                .0
-                .iter()
-                .filter(|button| button.0.contains(&i))
-                .count();
+    // for machine in machines {
+    //     for (i, joltage) in machine.desired_joltages.0.iter().enumerate() {
+    //         let num_contributing_buttons = machine
+    //             .buttons
+    //             .0
+    //             .iter()
+    //             .filter(|button| button.0.contains(&i))
+    //             .count();
 
-            dbg!(i, num_contributing_buttons);
-        }
+    //         dbg!(i, num_contributing_buttons);
+    //     }
 
-        println!("");
-    }
+    //     println!("");
+    // }
 
     (pt1, 0)
 }
@@ -99,7 +99,7 @@ impl FromStr for Machine {
                 .unwrap()
                 .as_bytes()
                 .iter()
-                .map(|c| if *c == b'#' { true } else { false })
+                .map(|c| *c == b'#')
                 .collect(),
         );
 
