@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use itertools::Itertools;
 
@@ -38,10 +38,13 @@ fn run_on_input(input: &str) -> (usize, usize) {
                     // it once, and so on.
                     .combinations(i)
                     .any(|combinations| {
-                        let mut state = machine.initial_indicators.clone();
+                        // Starting from all false and pressing buttons until the lights match the
+                        // desired state is equivalent to starting at the desired state and pressing
+                        // buttons until all lights are false (but the latter is simpler)
+                        let mut state = machine.indicators.clone();
                         for button in combinations {
                             state.apply_button_press(button);
-                            if state == machine.desired_indicators {
+                            if state.0.iter().all(|light| !light) {
                                 return true;
                             }
                         }
@@ -56,31 +59,78 @@ fn run_on_input(input: &str) -> (usize, usize) {
         })
         .sum();
 
-    // for machine in machines {
-    //     for (i, joltage) in machine.desired_joltages.0.iter().enumerate() {
-    //         let num_contributing_buttons = machine
-    //             .buttons
-    //             .0
-    //             .iter()
-    //             .filter(|button| button.0.contains(&i))
-    //             .count();
+    // TODO:
+    // For each machine, recursively:
+    // - First check if we can divide down the joltages by two. E.g. if we have (2, 4, 6) then the
+    //   minimum number of button presses to get there is guaranteed to be double the number of
+    //   button presses to reach (1, 2, 3). The key here is that each button press can only increment
+    //   each index by one, so it's not possible to find a more efficient set of button presses by
+    //   *not* performing the division and then multiplication.
+    // - Check the possible results of pressing each button a maximum of once
+    //   - If any of the results are the answer, great, we're done
+    //   - If not, check if any of the results have a greatest common divisor greater than 1 and
+    //     recurse. *Crucially*, we *only* need to recurse into the patterns that have a GCD
+    //     greater than 1. Anything else we can just drop as not being the optimal solution.
+    //
+    // To understand why this last point is the case, consider the case where we have done some
+    // pattern of single button presses and find an answer that we cannot divide down. If we carry
+    // this through to the next step, every possible sequence of buttons pressed in the next step
+    // can be expressed as either:
+    // - A combination we have already tried, if the buttons pressed in the next step do not overlap
+    //   with the buttons pressed in this step
+    // - A combination that can be expressed as some sequence of single presses followed by some
+    //   sequence of double presses: in this case we are guaranteed that the same pattern is covered
+    //   by other sequences that we will check.
+    let pt2 = machines.iter().map(|m| m.solve_pt2()).sum();
 
-    //         dbg!(i, num_contributing_buttons);
-    //     }
-
-    //     println!("");
-    // }
-
-    (pt1, 0)
+    (pt1, pt2)
 }
 
 #[derive(Debug, Clone)]
 struct Machine {
-    initial_indicators: IndicatorLights,
-    desired_indicators: IndicatorLights,
-    initial_joltages: Joltages,
-    desired_joltages: Joltages,
+    indicators: IndicatorLights,
+    joltages: Joltages,
     buttons: Buttons,
+}
+
+impl Machine {
+    fn solve_pt2(&self) -> usize {
+        let pattern_costs = self
+            .buttons
+            .possible_single_press_joltages(self.joltages.0.len());
+
+        solve_single_recurse(self.joltages.clone(), &pattern_costs).unwrap()
+    }
+}
+
+fn solve_single_recurse(
+    joltages: Joltages,
+    pattern_costs: &HashMap<Joltages, usize>,
+) -> Option<usize> {
+    if joltages.is_zero() {
+        // Early return if we already solved it
+        return Some(0);
+    }
+
+    let mut answer = None;
+    for (pattern, cost) in pattern_costs.iter() {
+        if let Some(mut new_joltages) = joltages.clone() - pattern.clone() {
+            // At this stage, we only need to continue if everything is divisible by two
+            if new_joltages.is_even() {
+                new_joltages.halve();
+                if let Some(sub_cost) = solve_single_recurse(new_joltages, pattern_costs) {
+                    let new_cost = cost + 2 * sub_cost;
+                    match answer {
+                        Some(ans) if ans > new_cost => answer = Some(new_cost),
+                        None => answer = Some(new_cost),
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    answer
 }
 
 impl FromStr for Machine {
@@ -89,7 +139,7 @@ impl FromStr for Machine {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.split_whitespace();
 
-        let desired_state = IndicatorLights(
+        let indicators = IndicatorLights(
             parts
                 .next()
                 .unwrap()
@@ -103,10 +153,8 @@ impl FromStr for Machine {
                 .collect(),
         );
 
-        let initial_state = IndicatorLights(vec![false; desired_state.0.len()]);
-
         let mut buttons = Vec::new();
-        let mut desired_joltages = Vec::new();
+        let mut joltages = Vec::new();
 
         for part in parts {
             if part.starts_with('(') {
@@ -128,18 +176,14 @@ impl FromStr for Machine {
                     .split(',')
                     .map(|n| n.parse().unwrap())
                 {
-                    desired_joltages.push(joltage);
+                    joltages.push(joltage);
                 }
             }
         }
 
-        let initial_joltages = vec![0; desired_joltages.len()];
-
         Ok(Machine {
-            initial_indicators: initial_state,
-            desired_indicators: desired_state,
-            initial_joltages: Joltages(initial_joltages),
-            desired_joltages: Joltages(desired_joltages),
+            indicators,
+            joltages: Joltages(joltages),
             buttons: Buttons(buttons),
         })
     }
@@ -159,11 +203,35 @@ impl IndicatorLights {
 #[derive(Debug, Clone)]
 struct Buttons(Vec<Button>);
 
+impl Buttons {
+    /// Return all possible joltages that can be produced by pressing each button a maximum of once,
+    /// along with the number of presses needed to achieve that joltage
+    fn possible_single_press_joltages(&self, joltage_len: usize) -> HashMap<Joltages, usize> {
+        let mut out = HashMap::new();
+
+        for n in 0..self.0.len() + 1 {
+            for combo in self.0.iter().combinations(n) {
+                let mut j = Joltages::new(joltage_len);
+                for button in combo {
+                    j.apply_button_press(button);
+                }
+
+                let entry = out.entry(j).or_insert(n);
+                if n < *entry {
+                    *entry = n;
+                }
+            }
+        }
+
+        out
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Button(Vec<usize>);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Joltages(Vec<usize>);
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct Joltages(Vec<i64>);
 
 impl Joltages {
     fn apply_button_press(&mut self, button: &Button) {
@@ -172,8 +240,40 @@ impl Joltages {
         }
     }
 
-    fn exceeds(&self, other: &Joltages) -> bool {
-        self.0.iter().zip(other.0.iter()).any(|(s, o)| s > o)
+    fn is_zero(&self) -> bool {
+        self.0.iter().all(|n| *n == 0)
+    }
+
+    fn is_even(&self) -> bool {
+        self.0.iter().all(|n| *n % 2 == 0)
+    }
+
+    fn halve(&mut self) {
+        for n in self.0.iter_mut() {
+            *n /= 2;
+        }
+    }
+
+    fn new(len: usize) -> Self {
+        Self(vec![0; len])
+    }
+}
+
+impl std::ops::Sub<Joltages> for Joltages {
+    type Output = Option<Joltages>;
+
+    fn sub(mut self, rhs: Joltages) -> Self::Output {
+        assert!(self.0.len() >= rhs.0.len());
+
+        for (n, other) in self.0.iter_mut().zip(rhs.0.into_iter()) {
+            if other > *n {
+                return None;
+            } else {
+                *n -= other;
+            }
+        }
+
+        Some(self)
     }
 }
 
@@ -187,6 +287,21 @@ mod tests {
     fn test_example() {
         let (pt1, pt2) = run_on_input(EXAMPLE_INPUT);
         assert_eq!(7, pt1);
-        // assert_eq!(33, pt2);
+        assert_eq!(33, pt2);
+    }
+
+    #[test]
+    fn test_single_problematic() {
+        let machine: Machine = "[#.#.#] (0,1,2,3,4) (0,2,4) (0,2,3) {29,17,29,20,26}"
+            .parse()
+            .unwrap();
+
+        let pattern_costs = machine
+            .buttons
+            .possible_single_press_joltages(machine.joltages.0.len());
+        dbg!(pattern_costs);
+
+        // I don't actually know what the answer should be, we are just testing that it doesn't panic
+        let _pt2 = machine.solve_pt2();
     }
 }
