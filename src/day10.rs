@@ -59,28 +59,6 @@ fn run_on_input(input: &str) -> (usize, usize) {
         })
         .sum();
 
-    // TODO:
-    // For each machine, recursively:
-    // - First check if we can divide down the joltages by two. E.g. if we have (2, 4, 6) then the
-    //   minimum number of button presses to get there is guaranteed to be double the number of
-    //   button presses to reach (1, 2, 3). The key here is that each button press can only increment
-    //   each index by one, so it's not possible to find a more efficient set of button presses by
-    //   *not* performing the division and then multiplication.
-    // - Check the possible results of pressing each button a maximum of once
-    //   - If any of the results are the answer, great, we're done
-    //   - If not, check if any of the results have a greatest common divisor greater than 1 and
-    //     recurse. *Crucially*, we *only* need to recurse into the patterns that have a GCD
-    //     greater than 1. Anything else we can just drop as not being the optimal solution.
-    //
-    // To understand why this last point is the case, consider the case where we have done some
-    // pattern of single button presses and find an answer that we cannot divide down. If we carry
-    // this through to the next step, every possible sequence of buttons pressed in the next step
-    // can be expressed as either:
-    // - A combination we have already tried, if the buttons pressed in the next step do not overlap
-    //   with the buttons pressed in this step
-    // - A combination that can be expressed as some sequence of single presses followed by some
-    //   sequence of double presses: in this case we are guaranteed that the same pattern is covered
-    //   by other sequences that we will check.
     let pt2 = machines.iter().map(|m| m.solve_pt2()).sum();
 
     (pt1, pt2)
@@ -95,30 +73,59 @@ struct Machine {
 
 impl Machine {
     fn solve_pt2(&self) -> usize {
+        // This is all of the possible joltages that cna be produced by pressing each button at most
+        // once, along with the number of button presses required to make that value.
         let pattern_costs = self
             .buttons
             .possible_single_press_joltages(self.joltages.0.len());
 
-        solve_single_recurse(self.joltages.clone(), &pattern_costs).unwrap()
+        let mut cache = HashMap::new();
+        solve_single_recurse(self.joltages.clone(), &pattern_costs, &mut cache).unwrap()
     }
 }
 
+/// Starting from the target joltages, recursively subtract the possible button presses until we
+/// find the mimimum possible number of presses to reach zero.
 fn solve_single_recurse(
     joltages: Joltages,
     pattern_costs: &HashMap<Joltages, usize>,
+    cache: &mut HashMap<Joltages, Option<usize>>,
 ) -> Option<usize> {
+    // Early return if we already solved it
     if joltages.is_zero() {
-        // Early return if we already solved it
         return Some(0);
+    }
+
+    // Early return if answer already cached
+    if let Some(answer) = cache.get(&joltages) {
+        return *answer;
     }
 
     let mut answer = None;
     for (pattern, cost) in pattern_costs.iter() {
         if let Some(mut new_joltages) = joltages.clone() - pattern.clone() {
-            // At this stage, we only need to continue if everything is divisible by two
+            // At this stage, we only need to continue if everything is divisible by two. The reason
+            // this works is that *any* sequence of button presses can be expressed as a set of
+            // buttons pressed once, and a set of buttons pressed an even number of times.
+            //
+            // It is also guaranteed that any sequence of button presses where all buttons are
+            // pressed an even number of times results in all joltages being even.
+            //
+            // Finally, if we have even joltages we know for sure that halving the joltages, finding
+            // the number of button presses to reach the halved value and then doubling it will give
+            // the optimum number of presses (ie. there cannot be a way involving an odd number of
+            // button presses that 'beats' this route). This is only the case because each button
+            // can only increment each joltage by 1, if we had increments greater than 1 this would
+            // no longer be the case.
+            //
+            // Dividing it up this way greatly reduces the state-space we need to visit to find the
+            // minumum number of button presses, since by pressing each button once and then only
+            // considering possibilities where the remaining joltages are even we guarantee covering
+            // every possible sequence of button presses that arrives at the answer without actually
+            // having to fully check them all one button press at a time.
             if new_joltages.is_even() {
                 new_joltages.halve();
-                if let Some(sub_cost) = solve_single_recurse(new_joltages, pattern_costs) {
+                if let Some(sub_cost) = solve_single_recurse(new_joltages, pattern_costs, cache) {
                     let new_cost = cost + 2 * sub_cost;
                     match answer {
                         Some(ans) if ans > new_cost => answer = Some(new_cost),
@@ -130,6 +137,7 @@ fn solve_single_recurse(
         }
     }
 
+    cache.insert(joltages, answer);
     answer
 }
 
