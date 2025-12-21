@@ -129,6 +129,9 @@ fn solve_single_recurse(
             // considering possibilities where the remaining joltages are even we guarantee covering
             // every possible sequence of button presses that arrives at the answer without actually
             // having to fully check them all one button press at a time.
+            //
+            // The idea for this approach came from:
+            // <https://www.reddit.com/r/adventofcode/comments/1pk87hl/2025_day_10_part_2_bifurcate_your_way_to_victory/>
             if new_joltages.is_even() {
                 new_joltages.halve();
                 if let Some(sub_cost) = solve_single_recurse(new_joltages, pattern_costs, cache) {
