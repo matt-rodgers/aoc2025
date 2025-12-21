@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, str::FromStr};
 
 use arrayvec::ArrayVec;
-use itertools::Itertools;
+use itertools::{EitherOrBoth, Itertools};
 
 use crate::Aoc;
 
@@ -106,39 +106,36 @@ fn solve_single_recurse(
 
     let mut answer = None;
     for (pattern, cost) in pattern_costs.iter() {
-        if let Some(mut new_joltages) = joltages.clone() - pattern.clone() {
-            // At this stage, we only need to continue if everything is divisible by two. The reason
-            // this works is that *any* sequence of button presses can be expressed as a set of
-            // buttons pressed once, and a set of buttons pressed an even number of times.
-            //
-            // It is also guaranteed that any sequence of button presses where all buttons are
-            // pressed an even number of times results in all joltages being even.
-            //
-            // Finally, if we have even joltages we know for sure that halving the joltages, finding
-            // the number of button presses to reach the halved value and then doubling it will give
-            // the optimum number of presses (ie. there cannot be a way involving an odd number of
-            // button presses that 'beats' this route). This is only the case because each button
-            // can only increment each joltage by 1, if we had increments greater than 1 this would
-            // no longer be the case.
-            //
-            // Dividing it up this way greatly reduces the state-space we need to visit to find the
-            // minumum number of button presses, since by pressing each button once and then only
-            // considering possibilities where the remaining joltages are even we guarantee covering
-            // every possible sequence of button presses that arrives at the answer without actually
-            // having to fully check them all one button press at a time.
-            //
-            // The idea for this approach came from:
-            // <https://www.reddit.com/r/adventofcode/comments/1pk87hl/2025_day_10_part_2_bifurcate_your_way_to_victory/>
-            if new_joltages.is_even() {
-                new_joltages.halve();
-                if let Some(sub_cost) = solve_single_recurse(new_joltages, pattern_costs, cache) {
-                    let new_cost = cost + 2 * sub_cost;
-                    match answer {
-                        Some(ans) if ans > new_cost => answer = Some(new_cost),
-                        None => answer = Some(new_cost),
-                        _ => {}
-                    }
-                }
+        // At this stage, we only need to continue if everything is divisible by two. The reason
+        // this works is that *any* sequence of button presses can be expressed as a set of buttons
+        // pressed once, and a set of buttons pressed an even number of times.
+        //
+        // It is also guaranteed that any sequence of button presses where all buttons are pressed
+        // an even number of times results in all joltages being even.
+        //
+        // Finally, if we have even joltages we know for sure that halving the joltages, finding
+        // the number of button presses to reach the halved value and then doubling it will give the
+        // optimum number of presses (ie. there cannot be a way involving an odd number of button
+        // presses that 'beats' this route). This is only the case because each button can only
+        // increment each joltage by 1, if we had increments greater than 1 this would no longer be
+        // the case.
+        //
+        // Dividing it up this way greatly reduces the state-space we need to visit to find the
+        // minumum number of button presses, since by pressing each button once and then only
+        // considering possibilities where the remaining joltages are even we guarantee covering
+        // every possible sequence of button presses that arrives at the answer without actually
+        // having to fully check them all one button press at a time.
+        //
+        // The idea for this approach came from:
+        // <https://www.reddit.com/r/adventofcode/comments/1pk87hl/2025_day_10_part_2_bifurcate_your_way_to_victory/>
+        if let Some(new_joltages) = joltages.subtract_and_halve_if_possible(pattern)
+            && let Some(sub_cost) = solve_single_recurse(new_joltages, pattern_costs, cache)
+        {
+            let new_cost = cost + 2 * sub_cost;
+            match answer {
+                Some(ans) if ans > new_cost => answer = Some(new_cost),
+                None => answer = Some(new_cost),
+                _ => {}
             }
         }
     }
@@ -258,22 +255,38 @@ impl Joltages {
         self.0.iter().all(|n| *n == 0)
     }
 
-    fn is_even(&self) -> bool {
-        self.0.iter().all(|n| *n % 2 == 0)
-    }
-
-    fn halve(&mut self) {
-        for n in self.0.iter_mut() {
-            *n /= 2;
-        }
-    }
-
     fn new(len: usize) -> Self {
         let mut av = ArrayVec::new();
         for _ in 0..len {
             av.push(0);
         }
         Self(av)
+    }
+
+    /// This combines a few steps as an optimisation:
+    /// - Check if it's possible to subtract other from self without going negative
+    /// - Check if self - other gives a result that is all even
+    /// - If both of the above are true, do the subtraction, divide by two, and return.
+    fn subtract_and_halve_if_possible(&self, other: &Joltages) -> Option<Joltages> {
+        if self
+            .0
+            .iter()
+            .zip_longest(other.0.iter())
+            .all(|el| match el {
+                EitherOrBoth::Both(&a, &b) => a >= b && (a - b) % 2 == 0,
+                EitherOrBoth::Left(&a) => a % 2 == 0,
+                EitherOrBoth::Right(_) => unreachable!(),
+            })
+        {
+            let mut out = self.clone();
+            for (n, other) in out.0.iter_mut().zip(other.0.iter()) {
+                *n -= other;
+                *n /= 2;
+            }
+            Some(out)
+        } else {
+            None
+        }
     }
 }
 
