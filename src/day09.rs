@@ -53,8 +53,11 @@ fn run_on_input(input: &str) -> (i64, i64) {
         });
 
         let any_boundary_lines_intersect_rectangle =
-            bounding_polygon.iter_line_segments().any(|boundary_seg| {
-                rectangle.iter_line_segments().any(|rectangle_seg| {
+            // Weirdly, having the rectangle line segments as the outer iteration and the bounding
+            // polygon as the inner seems to perform significantly better here. I have no idea
+            // why...
+            rectangle.iter_line_segments().any(|rectangle_seg| {
+                bounding_polygon.iter_line_segments().any(|boundary_seg| {
                     match rectangle_seg.intersects(&boundary_seg) {
                         Intersection::Intersecting => true,
                         Intersection::NotIntersecting => false,
