@@ -1,2 +1,5 @@
 /target
 /inputs
+flamegraph.svg
+perf.*
+stacks.folded
