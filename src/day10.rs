@@ -1,10 +1,13 @@
 use std::{collections::BTreeMap, str::FromStr};
 
+use arrayvec::ArrayVec;
 use itertools::Itertools;
 
 use crate::Aoc;
 
 const INPUT: &str = include_str!("../inputs/10.in");
+
+const MAX_ARRAY_LEN: usize = 10;
 
 pub struct Day10;
 
@@ -21,6 +24,9 @@ fn run_on_input(input: &str) -> (usize, usize) {
         .lines()
         .map(|line| line.parse().unwrap())
         .collect();
+
+    let max_len: usize = machines.iter().map(|m| m.joltages.0.len()).max().unwrap();
+    dbg!(max_len);
 
     let pt1 = machines
         .iter()
@@ -162,7 +168,7 @@ impl FromStr for Machine {
         );
 
         let mut buttons = Vec::new();
-        let mut joltages = Vec::new();
+        let mut joltages = ArrayVec::new();
 
         for part in parts {
             if part.starts_with('(') {
@@ -198,7 +204,7 @@ impl FromStr for Machine {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct IndicatorLights(Vec<bool>);
+struct IndicatorLights(ArrayVec<bool, MAX_ARRAY_LEN>);
 
 impl IndicatorLights {
     fn apply_button_press(&mut self, button: &Button) {
@@ -236,10 +242,10 @@ impl Buttons {
 }
 
 #[derive(Debug, Clone)]
-struct Button(Vec<usize>);
+struct Button(ArrayVec<usize, MAX_ARRAY_LEN>);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-struct Joltages(Vec<i64>);
+struct Joltages(ArrayVec<i64, MAX_ARRAY_LEN>);
 
 impl Joltages {
     fn apply_button_press(&mut self, button: &Button) {
@@ -263,7 +269,11 @@ impl Joltages {
     }
 
     fn new(len: usize) -> Self {
-        Self(vec![0; len])
+        let mut av = ArrayVec::new();
+        for _ in 0..len {
+            av.push(0);
+        }
+        Self(av)
     }
 }
 
