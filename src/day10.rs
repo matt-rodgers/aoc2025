@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::BTreeMap, str::FromStr};
 
 use itertools::Itertools;
 
@@ -79,7 +79,7 @@ impl Machine {
             .buttons
             .possible_single_press_joltages(self.joltages.0.len());
 
-        let mut cache = HashMap::new();
+        let mut cache = BTreeMap::new();
         solve_single_recurse(self.joltages.clone(), &pattern_costs, &mut cache).unwrap()
     }
 }
@@ -88,8 +88,8 @@ impl Machine {
 /// find the mimimum possible number of presses to reach zero.
 fn solve_single_recurse(
     joltages: Joltages,
-    pattern_costs: &HashMap<Joltages, usize>,
-    cache: &mut HashMap<Joltages, Option<usize>>,
+    pattern_costs: &BTreeMap<Joltages, usize>,
+    cache: &mut BTreeMap<Joltages, Option<usize>>,
 ) -> Option<usize> {
     // Early return if we already solved it
     if joltages.is_zero() {
@@ -214,8 +214,8 @@ struct Buttons(Vec<Button>);
 impl Buttons {
     /// Return all possible joltages that can be produced by pressing each button a maximum of once,
     /// along with the number of presses needed to achieve that joltage
-    fn possible_single_press_joltages(&self, joltage_len: usize) -> HashMap<Joltages, usize> {
-        let mut out = HashMap::new();
+    fn possible_single_press_joltages(&self, joltage_len: usize) -> BTreeMap<Joltages, usize> {
+        let mut out = BTreeMap::new();
 
         for n in 0..self.0.len() + 1 {
             for combo in self.0.iter().combinations(n) {
@@ -238,7 +238,7 @@ impl Buttons {
 #[derive(Debug, Clone)]
 struct Button(Vec<usize>);
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 struct Joltages(Vec<i64>);
 
 impl Joltages {
