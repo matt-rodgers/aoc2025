@@ -25,9 +25,6 @@ fn run_on_input(input: &str) -> (usize, usize) {
         .map(|line| line.parse().unwrap())
         .collect();
 
-    let max_len: usize = machines.iter().map(|m| m.joltages.0.len()).max().unwrap();
-    dbg!(max_len);
-
     let pt1 = machines
         .iter()
         .map(|machine| {
@@ -320,7 +317,6 @@ mod tests {
         let pattern_costs = machine
             .buttons
             .possible_single_press_joltages(machine.joltages.0.len());
-        dbg!(pattern_costs);
 
         // I don't actually know what the answer should be, we are just testing that it doesn't panic
         let _pt2 = machine.solve_pt2();
