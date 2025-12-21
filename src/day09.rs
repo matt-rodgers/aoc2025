@@ -92,11 +92,20 @@ impl Point {
 struct Rectangle {
     corner_a: Point,
     corner_b: Point,
+    corner_c: Point,
+    corner_d: Point,
 }
 
 impl Rectangle {
     fn new(corner_a: Point, corner_b: Point) -> Self {
-        Self { corner_a, corner_b }
+        let corner_c = Point::new(corner_a.x, corner_b.y);
+        let corner_d = Point::new(corner_b.x, corner_a.y);
+        Self {
+            corner_a,
+            corner_b,
+            corner_c,
+            corner_d,
+        }
     }
 
     fn area(&self) -> i64 {
@@ -105,16 +114,18 @@ impl Rectangle {
         (xdiff.abs() + 1) * (ydiff.abs() + 1)
     }
 
-    fn corners(&self) -> [Point; 4] {
+    fn corners(&self) -> [&Point; 4] {
+        // Note the ordering of corners is important here, so that the line segments drawn between
+        // each consecutive pair of corners are the sides of the rectangle.
         [
-            self.corner_a.clone(),
-            Point::new(self.corner_a.x, self.corner_b.y),
-            self.corner_b.clone(),
-            Point::new(self.corner_b.x, self.corner_a.y),
+            &self.corner_a,
+            &self.corner_c,
+            &self.corner_b,
+            &self.corner_d,
         ]
     }
 
-    fn iter_line_segments(&self) -> impl Iterator<Item = LineSegment> {
+    fn iter_line_segments(&self) -> impl Iterator<Item = LineSegment<'_>> {
         self.corners()
             .into_iter()
             .circular_tuple_windows()
@@ -123,13 +134,13 @@ impl Rectangle {
 }
 
 #[derive(Debug, Clone)]
-struct LineSegment {
-    a: Point,
-    b: Point,
+struct LineSegment<'a> {
+    a: &'a Point,
+    b: &'a Point,
 }
 
-impl LineSegment {
-    fn new(a: Point, b: Point) -> Self {
+impl<'a> LineSegment<'a> {
+    fn new(a: &'a Point, b: &'a Point) -> Self {
         Self { a, b }
     }
 
@@ -211,11 +222,11 @@ impl BoundingPolygon {
         polygon
     }
 
-    fn iter_line_segments(&self) -> impl Iterator<Item = LineSegment> {
+    fn iter_line_segments(&self) -> impl Iterator<Item = LineSegment<'_>> {
         self.points
             .iter()
             .circular_tuple_windows()
-            .map(|(a, b)| LineSegment::new(a.clone(), b.clone()))
+            .map(|(a, b)| LineSegment::new(a, b))
     }
 
     fn contains(&self, point: &Point) -> Bounding {
@@ -336,12 +347,17 @@ mod tests {
 
     #[test]
     fn test_line_segment_intersecting() {
-        let a = LineSegment::new(Point::new(0, 3), Point::new(5, 3));
-        let b = LineSegment::new(Point::new(3, 0), Point::new(3, 5));
+        let pta = Point::new(0, 3);
+        let ptb = Point::new(5, 3);
+        let ptc = Point::new(3, 0);
+        let ptd = Point::new(3, 5);
+        let a = LineSegment::new(&pta, &ptb);
+        let b = LineSegment::new(&ptc, &ptd);
         assert_eq!(Intersection::Intersecting, a.intersects(&b));
         assert_eq!(Intersection::Intersecting, b.intersects(&a));
 
-        let c = LineSegment::new(Point::new(3, 3), Point::new(3, 5));
+        let pte = Point::new(3, 3);
+        let c = LineSegment::new(&pte, &ptd);
         assert_eq!(
             Intersection::PerpendicularTouching(Point::new(3, 3)),
             a.intersects(&c)
@@ -354,14 +370,12 @@ mod tests {
 
     #[test]
     fn test_line_segment_intersecting_from_example() {
-        let a = LineSegment {
-            a: Point { x: 7, y: 1 },
-            b: Point { x: 11, y: 1 },
-        };
-        let b = LineSegment {
-            a: Point { x: 9, y: 5 },
-            b: Point { x: 9, y: 3 },
-        };
+        let pta = Point { x: 7, y: 1 };
+        let ptb = Point { x: 11, y: 1 };
+        let a = LineSegment { a: &pta, b: &ptb };
+        let ptc = Point { x: 9, y: 5 };
+        let ptd = Point { x: 9, y: 3 };
+        let b = LineSegment { a: &ptc, b: &ptd };
 
         // Should not intersect because the y value of segment a lies completely outside the y range
         // of segment b.
@@ -369,14 +383,3 @@ mod tests {
         assert_eq!(Intersection::NotIntersecting, b.intersects(&a));
     }
 }
-
-// There is an intersection between line segments LineSegment { a: Point { x: 7, y: 1 }, b: Point { x: 11, y: 1 } } and LineSegment { a: Point { x: 9, y: 5 }, b: Point { x: 9, y: 3 } } for rectangle Rectangle {
-//     corner_a: Point {
-//         x: 9,
-//         y: 5,
-//     },
-//     corner_b: Point {
-//         x: 2,
-//         y: 3,
-//     },
-// }
