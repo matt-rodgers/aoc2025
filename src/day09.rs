@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use crate::Aoc;
 use itertools::Itertools;
 
@@ -31,7 +33,7 @@ fn run_on_input(input: &str) -> (i64, i64) {
     rectangles.sort_unstable_by_key(|rect| rect.area());
     let largest_area = rectangles.last().unwrap().area();
 
-    let bounding_polygon = BoundingPolygon::new(coordinates.clone());
+    let mut bounding_polygon = BoundingPolygon::new(coordinates.clone());
 
     while let Some(rectangle) = rectangles.pop() {
         // A rectangle is a valid answer for part 2 if it's entirely contained in the bounding
@@ -40,9 +42,9 @@ fn run_on_input(input: &str) -> (i64, i64) {
         //   2. None of the boundary lines intersect the lines of the rectangle
         //
         // It's also possible for a rectangle to be a valid answer if the bounding polygon intrudes
-        // on the rectangle, but the intrusion is only of width 2 (and therefore all grid there are
-        // no grid points in the intrusion that are not part of the bounding line). The solution
-        // assumes that this never happens.
+        // on the rectangle, but the intrusion is only of width 2 (and therefore there are no grid
+        // points in the intrusion that are not part of the bounding line). The solution assumes
+        // that this never happens.
         let rectangle_is_inside_boundary = rectangle.corners().iter().all(|corner| {
             matches!(
                 bounding_polygon.contains(corner),
@@ -76,7 +78,7 @@ fn run_on_input(input: &str) -> (i64, i64) {
     panic!("No rectangles match the search criteria...");
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Point {
     x: i64,
     y: i64,
@@ -204,12 +206,16 @@ enum Intersection {
 
 struct BoundingPolygon {
     points: Vec<Point>,
+    cache: BTreeMap<Point, Bounding>,
 }
 
 impl BoundingPolygon {
     /// Points are ordered (e.g. each consecutive point is joined by a LineSegment)
     fn new(points: Vec<Point>) -> Self {
-        let polygon = Self { points };
+        let polygon = Self {
+            points,
+            cache: BTreeMap::new(),
+        };
 
         // Manually inspecting the input, we see that all line segments are either vertical or
         // horizontal. Assert that this is actually the case, as we'll use this assumption later.
@@ -229,7 +235,17 @@ impl BoundingPolygon {
             .map(|(a, b)| LineSegment::new(a, b))
     }
 
-    fn contains(&self, point: &Point) -> Bounding {
+    fn contains(&mut self, point: &Point) -> Bounding {
+        if let Some(bounding) = self.cache.get(point) {
+            return *bounding;
+        }
+
+        let bounding = self.contains_inner(point);
+        self.cache.insert(point.clone(), bounding);
+        bounding
+    }
+
+    fn contains_inner(&self, point: &Point) -> Bounding {
         // Ray casting algorithm to see if a point lies within the polygon. A point is within the
         // polygon if a horizontal line drawn from the point to infinity crosses the bounding line
         // of the polygon an odd number of times.
