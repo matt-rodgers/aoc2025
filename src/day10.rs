@@ -245,7 +245,7 @@ impl Buttons {
 struct Button(ArrayVec<usize, MAX_ARRAY_LEN>);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-struct Joltages(ArrayVec<i64, MAX_ARRAY_LEN>);
+struct Joltages(ArrayVec<u16, MAX_ARRAY_LEN>);
 
 impl Joltages {
     fn apply_button_press(&mut self, button: &Button) {
