@@ -91,7 +91,7 @@ impl Machine {
 /// find the mimimum possible number of presses to reach zero.
 fn solve_single_recurse(
     joltages: Joltages,
-    pattern_costs: &BTreeMap<Joltages, usize>,
+    pattern_costs: &Vec<(Joltages, usize)>,
     cache: &mut BTreeMap<Joltages, Option<usize>>,
 ) -> Option<usize> {
     // Early return if we already solved it
@@ -217,24 +217,26 @@ struct Buttons(Vec<Button>);
 impl Buttons {
     /// Return all possible joltages that can be produced by pressing each button a maximum of once,
     /// along with the number of presses needed to achieve that joltage
-    fn possible_single_press_joltages(&self, joltage_len: usize) -> BTreeMap<Joltages, usize> {
-        let mut out = BTreeMap::new();
+    ///
+    /// This was initially a BTreeMap, but it turns out that while duplicate entries are
+    /// theoretically possible (e.g. press (1, 1) once or (1, 0), (0, 1) to get the same joltage),
+    /// this never actually occurs in the real input. Even if it did happen, duplicates will be
+    /// handled correctly (if slightly inefficiently) in later steps, so we're OK to go ahead
+    /// and just use a Vec instead to eliminate the cost of map lookups (once constructed we just
+    /// iteratoe over it rather than performing any random lookup anyway).
+    fn possible_single_press_joltages(&self, joltage_len: usize) -> Vec<(Joltages, usize)> {
+        (0..self.0.len() + 1)
+            .flat_map(|n| {
+                self.0.iter().combinations(n).map(move |combo| {
+                    let mut j = Joltages::new(joltage_len);
+                    for button in combo {
+                        j.apply_button_press(button);
+                    }
 
-        for n in 0..self.0.len() + 1 {
-            for combo in self.0.iter().combinations(n) {
-                let mut j = Joltages::new(joltage_len);
-                for button in combo {
-                    j.apply_button_press(button);
-                }
-
-                let entry = out.entry(j).or_insert(n);
-                if n < *entry {
-                    *entry = n;
-                }
-            }
-        }
-
-        out
+                    (j, n)
+                })
+            })
+            .collect()
     }
 }
 
@@ -326,10 +328,6 @@ mod tests {
         let machine: Machine = "[#.#.#] (0,1,2,3,4) (0,2,4) (0,2,3) {29,17,29,20,26}"
             .parse()
             .unwrap();
-
-        let pattern_costs = machine
-            .buttons
-            .possible_single_press_joltages(machine.joltages.0.len());
 
         // I don't actually know what the answer should be, we are just testing that it doesn't panic
         let _pt2 = machine.solve_pt2();
