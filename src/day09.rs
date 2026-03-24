@@ -312,7 +312,7 @@ mod tests {
 
     #[test]
     fn test_bounding_polygon() {
-        let polygon = BoundingPolygon::new(vec![
+        let mut polygon = BoundingPolygon::new(vec![
             Point::new(0, 0),
             Point::new(5, 0),
             Point::new(5, 5),
@@ -332,7 +332,7 @@ mod tests {
         // 3.|..|...|...|.     3.|..|...|...|.
         // 4.+--+...+---+.     4.+--+...+---+.
         // 5..............     5..............
-        let polygon = BoundingPolygon::new(vec![
+        let mut polygon = BoundingPolygon::new(vec![
             Point::new(2, 1),
             Point::new(13, 1),
             Point::new(13, 4),
@@ -350,7 +350,7 @@ mod tests {
 
     #[test]
     fn test_bounding_polygon_example_input() {
-        let polygon = BoundingPolygon::new(vec![
+        let mut polygon = BoundingPolygon::new(vec![
             Point::new(7, 1),
             Point::new(11, 1),
             Point::new(11, 7),
